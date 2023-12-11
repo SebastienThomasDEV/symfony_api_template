@@ -6,6 +6,7 @@ use App\Encoder\Encoder;
 use App\Entity\User;
 use App\Repository\UserRepository;
 use App\Serializer\Serializer;
+use Doctrine\DBAL\Exception;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
@@ -22,27 +23,30 @@ class UserController extends AbstractController
     #[Route('/api/users/read', name: 'app_users', methods: ['GET'], format: 'json')]
     public function readAll(UserRepository $userRepository): JsonResponse
     {
-        dd(Encoder::encode(json_encode(Serializer::serializeAll($userRepository->findAll())), User::class));
-        return $this->json(Serializer::serializeAll($userRepository->findAll()));
+        try {
+            return $this->json(Serializer::serializeAll($userRepository->findAll()));
+        } catch (\Exception $e) {
+            return $this->json(['error' => $e->getMessage()]);
+        }
     }
 
     #[Route('/api/users/read/{id}', name: 'app_user', methods: ['GET'], format: 'json')]
     public function readOne(Request $request, UserRepository $userRepository): JsonResponse
     {
-        return $this->json(Serializer::serialize($userRepository->find($request->attributes->get('id'))));
+        try {
+            return $this->json(Serializer::serialize($userRepository->find($request->get('id'))));
+        } catch (\Exception $e) {
+            return $this->json(['error' => $e->getMessage()]);
+        }
     }
 
     #[Route('/api/users/create', name: 'app_user_create', methods: ['POST'], format: 'json')]
-    public function create(Request $request, UserPasswordHasherInterface $passwordHasher, UserRepository $userRepository): JsonResponse
+    public function create(Request $request, UserRepository $userRepository): JsonResponse
     {
         try {
-            $json = json_decode($request->getContent(), true);
-            $user = new User();
-            $user->setPassword($passwordHasher->hashPassword($user, $json['password']));
-            $user->setEmail($json['email']);
-            $user->setRoles(['ROLE_USER']);
+            $user = Encoder::encode($request->getContent(), User::class);
             $userRepository->save($user);
-            return $this->json($userRepository->save($user));
+            return $this->json(Serializer::serialize($user));
         } catch (\Exception $e) {
             return $this->json(['error' => $e->getMessage()]);
         }
